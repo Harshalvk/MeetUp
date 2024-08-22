@@ -1,6 +1,10 @@
-import Image from "next/image";
+import ListOnlineUsers from "@/components/ListOnlineUsers";
 import React from "react";
 
 export default function Home() {
-  return <h1>MeetUp</h1>;
+  return (
+    <div>
+      <ListOnlineUsers />
+    </div>
+  );
 }

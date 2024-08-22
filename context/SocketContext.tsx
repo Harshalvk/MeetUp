@@ -4,7 +4,9 @@ import { useUser } from "@clerk/nextjs";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
-interface ISocketContext {}
+interface ISocketContext {
+  onlineUsers: SocketUser[] | null;
+}
 
 export const SocketContext = createContext<ISocketContext | null>(null);
 
@@ -69,7 +71,15 @@ export const SocketContextProvider = ({
     };
   }, [socket, isSocketConnected, user]);
 
-  return <SocketContext.Provider value={{}}>{children}</SocketContext.Provider>;
+  return (
+    <SocketContext.Provider
+      value={{
+        onlineUsers,
+      }}
+    >
+      {children}
+    </SocketContext.Provider>
+  );
 };
 
 export const useSocket = () => {

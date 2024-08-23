@@ -13,6 +13,7 @@ import { io, Socket } from "socket.io-client";
 interface ISocketContext {
   onlineUsers: SocketUser[] | null;
   handleCall: (user: SocketUser) => void;
+  ongoingCall: OngoingCall | null
 }
 
 export const SocketContext = createContext<ISocketContext | null>(null);
@@ -121,6 +122,7 @@ export const SocketContextProvider = ({
       value={{
         onlineUsers,
         handleCall,
+        ongoingCall
       }}
     >
       {children}

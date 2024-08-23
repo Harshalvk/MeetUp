@@ -1,11 +1,18 @@
 "use client";
-import { SocketUser } from "@/types";
+import { OngoingCall, Participants, SocketUser } from "@/types";
 import { useUser } from "@clerk/nextjs";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { io, Socket } from "socket.io-client";
 
 interface ISocketContext {
   onlineUsers: SocketUser[] | null;
+  handleCall: (user: SocketUser) => void;
 }
 
 export const SocketContext = createContext<ISocketContext | null>(null);
@@ -19,8 +26,35 @@ export const SocketContextProvider = ({
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<SocketUser[] | null>(null);
+  const [ongoingCall, setOngoingCall] = useState<OngoingCall | null>(null);
 
-  console.log("onlinUsers", onlineUsers);
+  const currentSocketUser = onlineUsers?.find(
+    (onlineUser) => onlineUser.userId === user?.id
+  );
+
+  const handleCall = useCallback(
+    (user: SocketUser) => {
+      if (!currentSocketUser || !socket) return;
+
+      const participants = { caller: currentSocketUser, receiver: user };
+      setOngoingCall({
+        participants,
+        isRinging: false,
+      });
+      socket?.emit("call", participants);
+    },
+    [socket, currentSocketUser, ongoingCall]
+  );
+
+  const onIncomingCall = useCallback(
+    (participants: Participants) => {
+      setOngoingCall({
+        participants,
+        isRinging: true,
+      });
+    },
+    [socket, user, ongoingCall]
+  );
 
   useEffect(() => {
     const newSocket = io();
@@ -71,10 +105,22 @@ export const SocketContextProvider = ({
     };
   }, [socket, isSocketConnected, user]);
 
+  //calls
+  useEffect(() => {
+    if (!socket || !isSocketConnected) return;
+
+    socket.on("incomingCall", onIncomingCall);
+
+    return () => {
+      socket.off("incomingCall", onIncomingCall);
+    };
+  }, [socket, isSocketConnected, user, onIncomingCall]);
+
   return (
     <SocketContext.Provider
       value={{
         onlineUsers,
+        handleCall,
       }}
     >
       {children}

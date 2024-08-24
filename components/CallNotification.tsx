@@ -6,7 +6,7 @@ import { Button } from "./ui/button";
 import { PhoneCall, PhoneOff } from "lucide-react";
 
 const CallNotification = () => {
-  const { ongoingCall } = useSocket();
+  const { ongoingCall, handleJoinCall } = useSocket();
 
   if (!ongoingCall?.isRinging) return;
 
@@ -20,7 +20,7 @@ const CallNotification = () => {
           </h3>
           <p className="text-sm mb-2">Incoming Call</p>
           <div className="flex gap-8">
-            <Button className="w-12 h-12 bg-green-500 hover:bg-green-700 flex items-center justify-center text-white rounded-full">
+            <Button onClick={() => handleJoinCall(ongoingCall)} className="w-12 h-12 bg-green-500 hover:bg-green-700 flex items-center justify-center text-white rounded-full">
               <PhoneCall />
             </Button>
             <Button className="w-12 h-12 flex bg-red-500 hover:bg-red-700 items-center justify-center text-white rounded-full">

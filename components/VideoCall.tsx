@@ -3,6 +3,7 @@ import { useSocket } from "@/context/SocketContext";
 import React, { useCallback, useEffect, useState } from "react";
 import VideoContainer from "./VideoContainer";
 import { Mic, MicOff, Video, VideoOff } from "lucide-react";
+import { Button } from "./ui/button";
 
 const VideoCall = () => {
   const { localStream } = useSocket();
@@ -47,16 +48,18 @@ const VideoCall = () => {
         )}
       </div>
       <div className="mt-8 flex items-center justify-center">
-        <button onClick={toggleMic}>{isMicOn ? <MicOff /> : <Mic />}</button>
-        <button
-          className="px-4 py-2 bg-rose-500 text-white rounded mx-4"
+        <Button variant={"ghost"} onClick={toggleMic}>
+          {isMicOn ? <MicOff /> : <Mic />}
+        </Button>
+        <Button
+          className="px-4 py-2 bg-rose-500 hover:bg-rose-700 text-white rounded mx-4"
           onClick={() => {}}
         >
           End Call
-        </button>
-        <button onClick={toggleCamera}>
+        </Button>
+        <Button variant={"ghost"} onClick={toggleCamera}>
           {isVidOn ? <VideoOff /> : <Video />}
-        </button>
+        </Button>
       </div>
     </div>
   );

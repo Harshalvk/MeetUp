@@ -20,7 +20,7 @@ const VideoContainer = ({
   }, [stream]);
   return (
     <video
-      className="rounded border w-[800px]"
+      className="rounded border w-[800px] scale-x-[-1]"
       ref={videoRef}
       autoPlay
       muted={isLocalStream}

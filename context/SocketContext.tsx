@@ -15,6 +15,7 @@ interface ISocketContext {
   onlineUsers: SocketUser[] | null;
   ongoingCall: OngoingCall | null;
   localStream: MediaStream | null;
+  peer: PeerData | null;
   handleCall: (user: SocketUser) => void;
   handleJoinCall: (ongoingCall: OngoingCall) => void;
 }
@@ -163,7 +164,7 @@ export const SocketContextProvider = ({
       }
 
       if (peer) {
-        peer.peerConnection.signal(connectionData.sdp);
+        peer.peerConnection?.signal(connectionData.sdp);
         return;
       }
 
@@ -285,8 +286,9 @@ export const SocketContextProvider = ({
 
     return () => {
       socket.off("incomingCall", onIncomingCall);
+      socket.off("webrtcSignal", completePeerConnection);
     };
-  }, [socket, isSocketConnected, user, onIncomingCall]);
+  }, [socket, isSocketConnected, user, onIncomingCall, completePeerConnection]);
 
   return (
     <SocketContext.Provider
@@ -294,6 +296,7 @@ export const SocketContextProvider = ({
         onlineUsers,
         ongoingCall,
         localStream,
+        peer,
         handleCall,
         handleJoinCall,
       }}

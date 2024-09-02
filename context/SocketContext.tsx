@@ -120,6 +120,10 @@ export const SocketContextProvider = ({
         });
       }
 
+      if (peer) {
+        peer.peerConnection?.destroy();
+      }
+
       setOngoingCall(null);
       setPeer(null);
       if (localStream) {
@@ -141,6 +145,11 @@ export const SocketContextProvider = ({
             "stun:stun2.1.google.com:19302",
             "stun:stun3.1.google.com:19302",
           ],
+        },
+        {
+          urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject",
+          credential: "openrelayproject",
         },
       ];
 
@@ -189,7 +198,12 @@ export const SocketContextProvider = ({
         return;
       }
 
-      if (peer) {
+      if (peer && peer.peerConnection) {
+        if (peer.peerConnection.destroyed) {
+          console.log("Peer has been destroyed, cannot signal.");
+          return;
+        }
+
         peer.peerConnection?.signal(connectionData.sdp);
         return;
       }

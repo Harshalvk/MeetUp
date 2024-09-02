@@ -6,7 +6,7 @@ import { Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { Button } from "./ui/button";
 
 const VideoCall = () => {
-  const { localStream, peer, ongoingCall } = useSocket();
+  const { localStream, peer, ongoingCall, handleHangup, isCallEnded } = useSocket();
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVidOn, setIsVidOn] = useState(true);
 
@@ -38,6 +38,11 @@ const VideoCall = () => {
 
   const isOnCall = localStream && peer && ongoingCall ? true : false;
 
+  if (isCallEnded)
+    return <div className="mt-5 text-rose-500 text-center">Call ended</div>;
+
+  if (!localStream && !peer) return;
+
   return (
     <div>
       <div className="mt-4 relative">
@@ -62,7 +67,12 @@ const VideoCall = () => {
         </Button>
         <Button
           className="px-4 py-2 bg-rose-500 hover:bg-rose-700 text-white rounded mx-4"
-          onClick={() => {}}
+          onClick={() =>
+            handleHangup({
+              ongoingCall: ongoingCall ? ongoingCall : undefined,
+              isEmitHangup: true,
+            })
+          }
         >
           End Call
         </Button>

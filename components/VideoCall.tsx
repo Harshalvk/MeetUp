@@ -6,7 +6,8 @@ import { Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { Button } from "./ui/button";
 
 const VideoCall = () => {
-  const { localStream, peer, ongoingCall, handleHangup, isCallEnded } = useSocket();
+  const { localStream, peer, ongoingCall, handleHangup, isCallEnded } =
+    useSocket();
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVidOn, setIsVidOn] = useState(true);
 
@@ -45,7 +46,7 @@ const VideoCall = () => {
 
   return (
     <div>
-      <div className="mt-4 relative">
+      <div className="mt-4 relative max-w-[800px] mx-auto">
         {localStream && (
           <VideoContainer
             stream={localStream}

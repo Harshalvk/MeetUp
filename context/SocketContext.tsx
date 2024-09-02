@@ -112,8 +112,8 @@ export const SocketContextProvider = ({
   );
 
   const handleHangup = useCallback(
-    (data: { ongoingCall?: OngoingCall | null; isEmiHangup?: boolean }) => {
-      if (socket && user && data?.ongoingCall && data?.isEmiHangup) {
+    (data: { ongoingCall?: OngoingCall | null; isEmitHangup?: boolean }) => {
+      if (socket && user && data?.ongoingCall && data?.isEmitHangup) {
         socket.emit("hangup", {
           ongoingCall: data.ongoingCall,
           userHangingupId: user.id,
@@ -230,6 +230,10 @@ export const SocketContextProvider = ({
 
       if (!stream) {
         console.log("Could not get stream in handleJoinCall");
+        handleHangup({
+          ongoingCall: ongoingCall ? ongoingCall : undefined,
+          isEmitHangup: true,
+        });
         return;
       }
 

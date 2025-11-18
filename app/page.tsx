@@ -1,65 +1,186 @@
-import Image from "next/image";
+"use client";
+
+import { servers } from "@/lib/constants";
+import { useEffect, useRef, useState } from "react";
 
 export default function Home() {
+  const [localStream, setLocalStream] = useState<MediaStream>();
+  const [remoteStream, setRemoteStream] = useState<MediaStream>();
+  // const [peerConnection, setPeerConnection] = useState<RTCPeerConnection>();
+  const [p1Offer, setp1Offer] = useState<RTCSessionDescriptionInit>();
+  const [p2Answer, setp2Answer] = useState<RTCSessionDescriptionInit>();
+
+  const peerConnection = useRef<RTCPeerConnection | null>(null);
+
+  const ws = useRef<WebSocket | null>(null);
+
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    async function fetchStream() {
+      const lstream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      setLocalStream(lstream);
+    }
+    fetchStream();
+  }, []);
+
+  useEffect(() => {
+    if (!localStream) return;
+
+    const createOffer = async () => {
+      peerConnection.current = new RTCPeerConnection(servers);
+
+      const rStream = new MediaStream();
+      setRemoteStream(rStream);
+
+      localStream.getTracks().forEach((track) => {
+        peerConnection.current!.addTrack(track, localStream);
+      });
+
+      if (peerConnection) {
+        peerConnection.current.ontrack = (event) => {
+          event.streams[0].getTracks().forEach((track) => {
+            remoteStream?.addTrack(track);
+          });
+        };
+
+        peerConnection.current.onicecandidate = async (event) => {
+          if (event.candidate) {
+            ws.current?.send(
+              JSON.stringify({
+                type: "ice-candidate",
+                candidate: event.candidate,
+              })
+            );
+          }
+        };
+      }
+
+      const offer = await peerConnection.current.createOffer();
+      setp1Offer(offer);
+      await peerConnection.current.setLocalDescription(offer);
+
+      ws.current?.send(
+        JSON.stringify({
+          type: "offer",
+          offer: offer,
+        })
+      );
+    };
+
+    createOffer();
+  }, [localStream]);
+
+  useEffect(() => {
+    const socket = new WebSocket("ws://localhost:8080");
+    ws.current = socket;
+
+    socket.onopen = () => {
+      socket.send(
+        JSON.stringify({
+          type: "join",
+          roomId: "room2",
+        })
+      );
+    };
+
+    socket.onmessage = async (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "offer") {
+        console.log("client-OFFER:::", msg.offer);
+        peerConnection.current = new RTCPeerConnection(servers);
+
+        const rStream = new MediaStream();
+        setRemoteStream(rStream);
+
+        localStream?.getTracks().forEach((track) => {
+          peerConnection.current!.addTrack(track, localStream);
+        });
+
+        if (peerConnection) {
+          peerConnection.current.ontrack = (event) => {
+            event.streams[0].getTracks().forEach((track) => {
+              remoteStream?.addTrack(track);
+            });
+          };
+
+          peerConnection.current.onicecandidate = async (event) => {
+            if (event.candidate) {
+              ws.current?.send(
+                JSON.stringify({
+                  type: "ice-candidate",
+                  candidate: event.candidate,
+                })
+              );
+            }
+          };
+        }
+
+        await peerConnection.current.setRemoteDescription(p1Offer!);
+
+        const answer = await peerConnection.current.createAnswer();
+        setp2Answer(answer);
+
+        await peerConnection.current.setLocalDescription(answer);
+
+        ws.current?.send(
+          JSON.stringify({
+            type: "answer",
+            answer,
+          })
+        );
+      }
+
+      if (msg.type === "answer") {
+        console.log("client-Message:::", msg.answer);
+
+        if (!peerConnection.current?.currentRemoteDescription) {
+          peerConnection.current?.setRemoteDescription(p2Answer!);
+        }
+      }
+
+      if (msg.type === "ice-candidate") {
+        console.log("client-candidate::", msg.candidate);
+
+        if (peerConnection) {
+          peerConnection.current?.addIceCandidate(msg.candidate);
+        }
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream]);
+
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+    }
+  }, [remoteStream]);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="h-screen w-full bg-white">
+      <div className="flex gap-3 p-3 h-1/2">
+        <video
+          ref={localVideoRef}
+          className="bg-black flex-1 -scale-x-100"
+          autoPlay
+          playsInline
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+        <video
+          ref={localVideoRef}
+          className="bg-black flex-1"
+          autoPlay
+          playsInline
+        ></video>
+      </div>
     </div>
   );
 }

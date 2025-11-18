@@ -1,156 +1,30 @@
 "use client";
 
 import { servers } from "@/lib/constants";
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 export default function Home() {
-  const [localStream, setLocalStream] = useState<MediaStream>();
-  const [remoteStream, setRemoteStream] = useState<MediaStream>();
-  // const [peerConnection, setPeerConnection] = useState<RTCPeerConnection>();
-  const [p1Offer, setp1Offer] = useState<RTCSessionDescriptionInit>();
-  const [p2Answer, setp2Answer] = useState<RTCSessionDescriptionInit>();
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
-  const peerConnection = useRef<RTCPeerConnection | null>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
-  const ws = useRef<WebSocket | null>(null);
-
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
-    async function fetchStream() {
-      const lstream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-      setLocalStream(lstream);
-    }
-    fetchStream();
-  }, []);
-
-  useEffect(() => {
-    if (!localStream) return;
-
-    const createOffer = async () => {
-      peerConnection.current = new RTCPeerConnection(servers);
-
-      const rStream = new MediaStream();
-      setRemoteStream(rStream);
-
-      localStream.getTracks().forEach((track) => {
-        peerConnection.current!.addTrack(track, localStream);
-      });
-
-      if (peerConnection) {
-        peerConnection.current.ontrack = (event) => {
-          event.streams[0].getTracks().forEach((track) => {
-            remoteStream?.addTrack(track);
-          });
-        };
-
-        peerConnection.current.onicecandidate = async (event) => {
-          if (event.candidate) {
-            ws.current?.send(
-              JSON.stringify({
-                type: "ice-candidate",
-                candidate: event.candidate,
-              })
-            );
-          }
-        };
-      }
-
-      const offer = await peerConnection.current.createOffer();
-      setp1Offer(offer);
-      await peerConnection.current.setLocalDescription(offer);
-
-      ws.current?.send(
-        JSON.stringify({
-          type: "offer",
-          offer: offer,
-        })
-      );
-    };
-
-    createOffer();
-  }, [localStream]);
-
-  useEffect(() => {
-    const socket = new WebSocket("ws://localhost:8080");
-    ws.current = socket;
-
-    socket.onopen = () => {
-      socket.send(
-        JSON.stringify({
-          type: "join",
-          roomId: "room2",
-        })
-      );
-    };
-
-    socket.onmessage = async (event) => {
-      const msg = JSON.parse(event.data);
-      if (msg.type === "offer") {
-        console.log("client-OFFER:::", msg.offer);
-        peerConnection.current = new RTCPeerConnection(servers);
-
-        const rStream = new MediaStream();
-        setRemoteStream(rStream);
-
-        localStream?.getTracks().forEach((track) => {
-          peerConnection.current!.addTrack(track, localStream);
+    (async () => {
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
         });
-
-        if (peerConnection) {
-          peerConnection.current.ontrack = (event) => {
-            event.streams[0].getTracks().forEach((track) => {
-              remoteStream?.addTrack(track);
-            });
-          };
-
-          peerConnection.current.onicecandidate = async (event) => {
-            if (event.candidate) {
-              ws.current?.send(
-                JSON.stringify({
-                  type: "ice-candidate",
-                  candidate: event.candidate,
-                })
-              );
-            }
-          };
-        }
-
-        await peerConnection.current.setRemoteDescription(p1Offer!);
-
-        const answer = await peerConnection.current.createAnswer();
-        setp2Answer(answer);
-
-        await peerConnection.current.setLocalDescription(answer);
-
-        ws.current?.send(
-          JSON.stringify({
-            type: "answer",
-            answer,
-          })
-        );
+        setLocalStream(s);
+      } catch (err) {
+        console.error("getUserMedia error", err);
       }
-
-      if (msg.type === "answer") {
-        console.log("client-Message:::", msg.answer);
-
-        if (!peerConnection.current?.currentRemoteDescription) {
-          peerConnection.current?.setRemoteDescription(p2Answer!);
-        }
-      }
-
-      if (msg.type === "ice-candidate") {
-        console.log("client-candidate::", msg.candidate);
-
-        if (peerConnection) {
-          peerConnection.current?.addIceCandidate(msg.candidate);
-        }
-      }
-    };
+    })();
   }, []);
 
   useEffect(() => {
@@ -165,21 +39,152 @@ export default function Home() {
     }
   }, [remoteStream]);
 
+  const createPeerConnection = (socket: WebSocket) => {
+    console.log("creating RTCPeerConnection");
+    const pc = new RTCPeerConnection(servers);
+
+    const rStream = new MediaStream();
+    setRemoteStream(rStream);
+
+    pc.ontrack = (event) => {
+      console.log("pc.ontrack", event);
+      const incoming = event.streams?.[0];
+      if (incoming) {
+        incoming.getTracks().forEach((t) => rStream.addTrack(t));
+      } else {
+        event.track && rStream.addTrack(event.track);
+      }
+    };
+
+    pc.onicecandidate = (ev) => {
+      if (ev.candidate) {
+        console.log("pc.onicecandidate => send candidate", ev.candidate);
+        socket.send(
+          JSON.stringify({ type: "ice-candidate", candidate: ev.candidate })
+        );
+      }
+    };
+
+    return pc;
+  };
+
+  useEffect(() => {
+    const socket = new WebSocket("ws://localhost:8080");
+    wsRef.current = socket;
+
+    socket.onopen = () => {
+      console.log("ws open, joining room");
+      socket.send(JSON.stringify({ type: "join", roomId: "room2" }));
+    };
+
+    socket.onmessage = async (ev) => {
+      const msg = JSON.parse(ev.data);
+      console.log("ws.onmessage", msg);
+
+      if (msg.type === "peer-joined") {
+        console.log("peer-joined: create offer (we are offerer)");
+        if (!localStream) {
+          console.warn("no local stream yet; cannot create offer");
+          return;
+        }
+        pcRef.current = createPeerConnection(socket);
+        localStream
+          .getTracks()
+          .forEach((t) => pcRef.current!.addTrack(t, localStream));
+
+        try {
+          const offer = await pcRef.current.createOffer();
+          await pcRef.current.setLocalDescription(offer);
+          socket.send(JSON.stringify({ type: "offer", offer }));
+          console.log("offer sent");
+        } catch (err) {
+          console.error("createOffer error", err);
+        }
+      }
+
+      if (msg.type === "offer") {
+        console.log("received offer");
+        if (!localStream) {
+          console.warn("no local stream yet; cannot answer");
+          return;
+        }
+
+        pcRef.current = createPeerConnection(socket);
+        localStream
+          .getTracks()
+          .forEach((t) => pcRef.current!.addTrack(t, localStream));
+
+        try {
+          await pcRef.current.setRemoteDescription(msg.offer);
+          const answer = await pcRef.current.createAnswer();
+          await pcRef.current.setLocalDescription(answer);
+          socket.send(JSON.stringify({ type: "answer", answer }));
+          console.log("answer sent");
+        } catch (err) {
+          console.error("handle offer error", err);
+        }
+      }
+
+      if (msg.type === "answer") {
+        console.log("received answer");
+        try {
+          if (!pcRef.current) {
+            console.warn("no pc when answer arrived");
+            return;
+          }
+          await pcRef.current.setRemoteDescription(msg.answer);
+          console.log("remote description set (answer)");
+        } catch (err) {
+          console.error("setRemoteDescription(answer) error", err);
+        }
+      }
+
+      if (msg.type === "ice-candidate") {
+        console.log("received remote ICE candidate", msg.candidate);
+        try {
+          if (!pcRef.current) {
+            console.warn("no pc yet to addIceCandidate");
+            return;
+          }
+          await pcRef.current.addIceCandidate(
+            new RTCIceCandidate(msg.candidate)
+          );
+        } catch (err) {
+          console.error("addIceCandidate error", err);
+        }
+      }
+
+      if (msg.type === "peer-left") {
+        console.log("peer-left");
+        setRemoteStream(null);
+      }
+    };
+
+    socket.onerror = (e) => console.error("ws error", e);
+    socket.onclose = () => console.log("ws closed");
+
+    return () => {
+      socket.close();
+      wsRef.current = null;
+    };
+  }, [localStream]);
+
   return (
     <div className="h-screen w-full bg-white">
-      <div className="flex gap-3 p-3 h-1/2">
+      <div className="flex flex-col lg:flex-row w-full gap-3 p-3 h-1/2">
         <video
           ref={localVideoRef}
           className="bg-black flex-1 -scale-x-100"
           autoPlay
           playsInline
+          muted
         />
         <video
           ref={remoteVideoRef}
-          className="bg-black flex-1"
+          className={`bg-black flex-1 ${remoteStream ? "block" : "hidden"}`}
           autoPlay
           playsInline
-        ></video>
+        />
       </div>
     </div>
   );

@@ -15,44 +15,64 @@ type Room = {
 const wss = new WebSocketServer({ port: 8080 });
 const rooms: Room = {};
 
-wss.on("connection", (mws) => {
+wss.on("connection", (mws: WebSocket) => {
   console.log("someone joined");
   let currentRoom: string | null = null;
 
   mws.on("message", (data) => {
-    const msg = JSON.parse(data.toString());
+    try {
+      const msg = JSON.parse(data.toString());
 
-    // join room
-    if (msg.type === "join") {
-      const { roomId } = msg;
-      currentRoom = roomId;
+      // join room
+      if (msg.type === "join") {
+        const { roomId } = msg;
+        currentRoom = roomId;
 
-      if (!rooms[roomId]) rooms[roomId] = new Set();
-      rooms[roomId].add(mws);
+        if (!rooms[roomId]) rooms[roomId] = new Set();
 
-      console.log(`Client joined room ${roomId}`);
-      return;
-    }
+        rooms[roomId].forEach((client) => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: "peer-joined" }));
+          }
+        });
 
-    if (msg.type === "msg") {
-      const { message } = msg;
+        rooms[roomId].add(mws);
+        console.log(`Client joined room ${roomId}`);
+        return;
+      }
 
-      console.log("HEY", message);
-    }
+      if (msg.type === "msg") {
+        const { message } = msg;
 
-    // relay offer / answer / ice candidate within room
-    if (currentRoom && rooms[currentRoom]) {
-      rooms[currentRoom].forEach((client) => {
-        if (client && mws) {
-          client.send(JSON.stringify(msg));
-        }
-      });
+        console.log("HEY", message);
+      }
+
+      // relay offer / answer / ice candidate within room
+      if (currentRoom && rooms[currentRoom]) {
+        rooms[currentRoom].forEach((client) => {
+          if (client !== mws && client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(msg));
+          }
+        });
+      }
+    } catch (error) {
+      console.error("ws: error parsing messages::", error);
     }
   });
 
   wss.on("close", () => {
+    console.log("ON close trigged")
     if (currentRoom && rooms[currentRoom]) {
       rooms[currentRoom].delete(mws);
+      console.log(
+        `ws: left room ${currentRoom} (size=${rooms[currentRoom].size})`
+      );
+
+      rooms[currentRoom].forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({ type: "peer-left" }));
+        }
+      });
     }
   });
 });

@@ -175,7 +175,7 @@ export default function Home() {
           playsInline
         />
         <video
-          ref={localVideoRef}
+          ref={remoteVideoRef}
           className="bg-black flex-1"
           autoPlay
           playsInline
